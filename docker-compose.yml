@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  comments_analyzer:
+    container_name: comments_analyzer
+    image: comments-analyzer-image:1.0
+    build: .
+    ports:
+      - "8877:8877"
+    environment:
+      - TRAIN_DATA_LANGUAGE=en
+      - INPUT_COMMENTS_LANGUAGE=uk
+    networks:
+      - my_network
+    depends_on:
+      - translator
+
+  translator:
+    container_name: translator
+    image: libretranslate/libretranslate:latest
+    ports:
+      - "5000:5000"
+    environment:
+      - LANGUAGES=en,uk
+      - LT_LOAD_ONLY=en,uk
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    external: true

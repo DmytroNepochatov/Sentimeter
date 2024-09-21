@@ -1,0 +1,122 @@
+<!DOCTYPE HTML SYSTEM "http://www.thymeleaf.org/dtd/xhtml1-strict-thymeleaf-spring4-4.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity4"
+      lang="en">
+
+<head th:fragment="header-css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x"
+          crossorigin="anonymous">
+    <title>Sentimeter</title>
+    <style>
+        .navbar-custom {
+            background-color: rgb(28, 128, 3);
+        }
+
+        .navbar-custom .navbar-brand {
+            color: white;
+            height: 70px;
+            width: 1150px;
+        }
+
+        .text {
+            font-family: 'Roboto', sans-serif;
+            font-size: 36px;
+            letter-spacing: 2px;
+        }
+
+        .pic-size {
+            width: 70px;
+            height: 50px;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 5px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            font-size: 14px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip-button:hover + .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+    <link rel="shortcut icon" th:href="@{/images/brand.ico}" href="../static/images/brand.ico" type="image/x-icon">
+</head>
+
+<body>
+<div th:fragment="header">
+    <nav class="navbar navbar-expand-md navbar-fixed-top navbar-dark navbar-custom main-nav">
+        &nbsp;&nbsp;&nbsp;
+        <a class="navbar-brand text " href="/">
+            <img th:src="@{/images/brand.ico}" src="../static/images/brand.ico" alt=""
+                 class="d-inline-block align-text-top rounded pic-size">
+            Sentimeter
+        </a>
+        <div class="container d-flex justify-content-between">
+            <ul class="nav navbar-nav">
+                <li class="nav-item">
+                    <form class="d-flex" th:action="@{/search}" method="get">
+                        <input class="form-control me-2" type="search" placeholder="Назва продукту"
+                               aria-label="Search" name="searchKeyword" th:value="${searchKeyword}">
+                        <button class="btn btn-outline-light" type="submit">
+                            Пошук
+                        </button>
+                    </form>
+                </li>
+            </ul>
+            <ul class="nav navbar-nav">
+                <li class="nav-item">
+                    <div style="color: white; font-size: 19px;" th:text="${'Останнє оновлення '+ lastUpdated}"></div>
+                </li>
+            </ul>
+            <ul class="nav navbar-nav">
+                <li class="nav-item">
+                    <a th:href="@{/update}">
+                        <img id="update" class="tooltip-button" width="50" height="50" th:src="@{/images/refresh.ico}">
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div id="tooltip" class="tooltip-text">Виконати оновлення даних</div>
+
+    <script>
+        const pic = document.getElementById('update');
+        const tooltip = document.getElementById('tooltip');
+
+        pic.addEventListener('mousemove', function (e) {
+            const tooltipWidth = tooltip.offsetWidth;
+
+            tooltip.style.left = (e.pageX - tooltipWidth) + 'px';
+            tooltip.style.top = (e.pageY + 20) + 'px';
+            tooltip.style.visibility = 'visible';
+            tooltip.style.opacity = '1';
+        });
+
+        pic.addEventListener('mouseleave', function () {
+            tooltip.style.visibility = 'hidden';
+            tooltip.style.opacity = '0';
+        });
+    </script>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4"
+        crossorigin="anonymous"></script>
+</body>
+</html>

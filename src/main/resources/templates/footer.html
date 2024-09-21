@@ -1,0 +1,13 @@
+<footer th:fragment="footer">
+    <div style="background-color: rgb(234,241,241); height: 70px; text-align: center;">
+        <p style="font-size: 18px; margin-bottom: 5px;">Sentimeter&reg; by Dmytro Nepochatov</p>
+        <p id="copyright" style="margin-top: 0px;"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const currentDate = new Date().getFullYear();
+            document.getElementById('copyright').textContent = `Copyright \u00A9 ${currentDate}. All Rights Reserved.`;
+        });
+    </script>
+</footer>

@@ -1,0 +1,411 @@
+<!DOCTYPE HTML SYSTEM "http://www.thymeleaf.org/dtd/xhtml1-strict-thymeleaf-spring4-4.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity4"
+      lang="en">
+
+<head th:replace="header :: header-css">
+    <meta charset="UTF-8">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x"
+          crossorigin="anonymous">
+    <link rel="shortcut icon" th:href="@{/images/brand.ico}" href="../static/images/brand.ico" type="image/x-icon">
+</head>
+<body>
+
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+<script type="text/javascript" th:inline="javascript">
+    google.charts.load('current', {'packages':['corechart']});
+    google.charts.setOnLoadCallback(drawCharts);
+
+    var commentsData =  /*[[${commentsData}]]*/ '[]';
+    var posNumberDate =  /*[[${posNumberDate}]]*/ '[]';
+    var negNumberDate =  /*[[${negNumberDate}]]*/ '[]';
+    var pNumberMaxEnt = [[${posNumberMaxEnt}]];
+    var pNumberNaiveBayes= [[${posNumberNaiveBayes}]];
+    var nNumberMaxEnt= [[${negNumberMaxEnt}]];
+    var nNumberNaiveBayes= [[${negNumberNaiveBayes}]];
+
+    function drawCharts() {
+        drawChart();
+        drawChartForPosAndNeg(pNumberMaxEnt, nNumberMaxEnt, 'chart_1');
+        drawChartForPosAndNeg(pNumberNaiveBayes, nNumberNaiveBayes, 'chart_2');
+        drawChartPosAndNegWithDate();
+    }
+
+    function drawChart() {
+        var data = new google.visualization.DataTable();
+
+        data.addColumn('date', 'Дати');
+        data.addColumn('number', 'Коментарі');
+
+        var parsedData = JSON.parse(commentsData);
+
+        for (var date in parsedData) {
+            if (parsedData.hasOwnProperty(date)) {
+                var dateParts = date.split('.');
+                var formattedDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+
+                data.addRow([formattedDate, parsedData[date]]);
+            }
+        }
+
+        var options = {
+            legend: { position: 'none' },
+            hAxis: { title: 'Дати', format: 'dd.MM.yyyy',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                } },
+            vAxis: { title: 'Кількість коментарів', format: '0',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                }},
+            colors: ['#207304'],
+            pointSize: 6,
+            chartArea: {
+                top: 20,
+                bottom: 80,
+                left: 40,
+                right: 20
+            }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+        chart.draw(data, options);
+    }
+
+    function drawChartPosAndNegWithDate() {
+        var data = new google.visualization.DataTable();
+
+        data.addColumn('date', 'Дати');
+        data.addColumn('number', 'Позитивні коментарі');
+        data.addColumn('number', 'Негативні коментарі');
+        data.addColumn({type: 'string', role: 'style'});
+
+        var posNumberDateParsed = JSON.parse(posNumberDate);
+        var negNumberDateParsed = JSON.parse(negNumberDate);
+        var rows = [];
+        var allDates = new Set();
+
+        for (var date in posNumberDateParsed) {
+            if (posNumberDateParsed.hasOwnProperty(date)) {
+                allDates.add(date);
+            }
+        }
+        for (var date in negNumberDateParsed) {
+            if (negNumberDateParsed.hasOwnProperty(date)) {
+                allDates.add(date);
+            }
+        }
+
+        var sortedDates = Array.from(allDates).sort(function(a, b) {
+            var datePartsA = a.split('.');
+            var datePartsB = b.split('.');
+            var formattedDateA = new Date(datePartsA[2], datePartsA[1] - 1, datePartsA[0]);
+            var formattedDateB = new Date(datePartsB[2], datePartsB[1] - 1, datePartsB[0]);
+            return formattedDateA - formattedDateB;
+        });
+
+        sortedDates.forEach(function(date) {
+            var dateParts = date.split('.');
+            var formattedDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+            var posValue = posNumberDateParsed[date] || null;
+            var negValue = negNumberDateParsed[date] || null;
+
+            rows.push([formattedDate, posValue, negValue, '']);
+        });
+
+        data.addRows(rows);
+
+        var formatter = new google.visualization.PatternFormat('{0}');
+        formatter.format(data, [0, 1]);
+
+        var options = {
+            interpolateNulls: true,
+            legend: { position: 'right' },
+            hAxis: { title: 'Дати', format: 'dd.MM.yyyy',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                }},
+            vAxis: { title: 'Кількість коментарів', format: '0',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                }},
+            pointSize: 6,
+            series: {
+                0: { color: '#4f9a05' },
+                1: { color: '#b40404' }
+            },
+            chartArea: {
+                top: 20,
+                bottom: 80
+            }
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_pos_neg'));
+        chart.draw(data, options);
+    }
+
+    function drawChartForPosAndNeg(posValue, negValue, divId) {
+        var data = google.visualization.arrayToDataTable([
+            ['Тип коментарів', 'Кількість коментарів', { role: 'style' }],
+            ['Позитивні коментарі', posValue, '#4f9a05'],
+            ['Негативні коментарі', negValue, '#b40404']
+        ]);
+
+        var options = {
+            legend: { position: 'none' },
+            hAxis: {
+                title: 'Тип коментарів',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                }
+            },
+            vAxis: {
+                title: 'Кількість коментарів',
+                format: '0',
+                textStyle: {
+                    fontSize: 12
+                },
+                titleTextStyle: {
+                    fontSize: 14
+                }
+            },
+            chartArea: {
+                top: 20,
+                bottom: 80
+            }
+        };
+
+        var chart = new google.visualization.ColumnChart(document.getElementById(divId));
+        chart.draw(data, options);
+    }
+</script>
+
+<div th:replace="header :: header"></div>
+
+<div class="container-fluid">
+    <br>
+    <div class="row">
+        <div class="col-1">
+            <a th:href="@{/?page=1}">
+                <img id="goback" class="tooltip-button" width="50" height="50" th:src="@{/images/goback.ico}">
+            </a>
+        </div>
+        <div class="col">
+            <div class="row">
+                <div class="col" align="center" style="font-size: 22px; font-weight: bold;" th:text="${'Продукт:'}"></div>
+            </div>
+            <div class="row">
+                <div class="col" align="center" style="font-size: 20px; text-decoration: underline;" th:text="${product.productName}"></div>
+            </div>
+        </div>
+        <div class="col-1"></div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col"></div>
+        <div class="col" align="center" style="font-size: 20px; font-weight: bold;">Відповідність кількості коментарів до дат</div>
+    </div>
+    <div class="row">
+        <div class="col-5">
+            <div class="row"><div class="col">&nbsp;</div></div>
+            <div class="row"><div class="col">&nbsp;</div></div>
+            <div class="row"><div class="col" style="font-size: 25px;" th:text="${'&nbsp; Оцінка товару від користувачів: '+product.ratingFromClients}"></div></div>
+            <div class="row"><div class="col" style="font-size: 25px;" th:text="${'&nbsp; Загальна кількість коментарів: '+product.totalQuantityComments}"></div></div>
+            <div class="row"><div class="col">&nbsp;</div></div>
+            <div class="row"><div class="col"><ul><li style="font-size: 18px; text-decoration: underline;" th:text="${product.positivePercentageMaxEnt}"></li></ul></div></div>
+            <div class="row"><div class="col"><ul><li style="font-size: 18px; text-decoration: underline;" th:text="${product.positivePercentageNaiveBayes}"></li></ul></div></div>
+        </div>
+        <div class="col-7" align="center"><div id="curve_chart" style="height: 400px; width: 800px;"></div></div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col" align="center" style="font-size: 20px; font-weight: bold;">Алгоритм максимальної ентропії</div>
+        <div class="col" align="center" style="font-size: 20px; font-weight: bold;">Наївний алгоритм Байєса</div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col" align="center"><div id="chart_1" style="height: 400px; width: 400px;"></div></div>
+        <div class="col" align="center"><div id="chart_2" style="height: 400px; width: 400px;"></div></div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col" align="center">
+            <div th:if="${!product.posCommentsMaxEnt.empty}">
+                <button type="submit" id="posMaxEnt" class="btn btn-primary" style="width: 200px;">Позитивні коментарі</button>
+            </div>
+        </div>
+        <div class="col" align="center">
+            <div th:if="${!product.posCommentsNaiveBayes.empty}">
+                <button type="submit" id="posNaiveBayes" class="btn btn-primary" style="width: 200px;">Позитивні коментарі</button>
+            </div>
+        </div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col">
+            <div th:if="${!product.posCommentsMaxEnt.empty}">
+                <div id="posMaxEntBlock" style="width: 550px;height: 500px;padding: 5px;margin: 5px auto;background-color: #f0f0f0;display: none;overflow-y: auto;border: 1px solid #ccc;">
+                    <div th:each="comment, iter : ${product.posCommentsMaxEnt}">
+                        <span th:text="${iter.index+1}+') '+${comment}"></span><br />
+                    </div>
+                </div>
+            </div>
+            <div th:if="${product.posCommentsMaxEnt.empty}" style="font-size: 20px; font-weight: bold;" th:text="${'Позитивні коментарі відсутні'}" align="center"></div>
+        </div>
+        <div class="col">
+            <div th:if="${!product.posCommentsNaiveBayes.empty}">
+                <div id="posNaiveBayesBlock" style="width: 550px;height: 500px;padding: 5px;margin: 5px auto;background-color: #f0f0f0;display: none;overflow-y: auto;border: 1px solid #ccc;">
+                    <div th:each="comment, iter : ${product.posCommentsNaiveBayes}">
+                        <span th:text="${iter.index+1}+') '+${comment}"></span><br />
+                    </div>
+                </div>
+            </div>
+            <div th:if="${product.posCommentsNaiveBayes.empty}" style="font-size: 20px; font-weight: bold;" th:text="${'Позитивні коментарі відсутні'}" align="center"></div>
+        </div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col" align="center">
+            <div th:if="${!product.negCommentsMaxEnt.empty}">
+                <button type="submit" id="negMaxEnt" class="btn btn-primary" style="width: 200px;">Негативні коментарі</button>
+            </div>
+        </div>
+        <div class="col" align="center">
+            <div th:if="${!product.negCommentsNaiveBayes.empty}">
+                <button type="submit" id="negNaiveBayes" class="btn btn-primary" style="width: 200px;">Негативні коментарі</button>
+            </div>
+        </div>
+    </div>
+    <br>
+    <div class="row">
+        <div class="col">
+            <div th:if="${!product.negCommentsMaxEnt.empty}">
+                <div id="negMaxEntBlock" style="width: 550px;height: 500px;padding: 5px;margin: 5px auto;background-color: #f0f0f0;display: none;overflow-y: auto;border: 1px solid #ccc;">
+                    <div th:each="comment, iter : ${product.negCommentsMaxEnt}">
+                        <span th:text="${iter.index+1}+') '+${comment}"></span><br />
+                    </div>
+                </div>
+            </div>
+            <div th:if="${product.negCommentsMaxEnt.empty}" style="font-size: 20px; font-weight: bold;" th:text="${'Негативні коментарі відсутні'}" align="center"></div>
+        </div>
+        <div class="col">
+            <div th:if="${!product.negCommentsNaiveBayes.empty}">
+                <div id="negNaiveBayesBlock" style="width: 550px;height: 500px;padding: 5px;margin: 5px auto;background-color: #f0f0f0;display: none;overflow-y: auto;border: 1px solid #ccc;">
+                    <div th:each="comment, iter : ${product.negCommentsNaiveBayes}">
+                        <span th:text="${iter.index+1}+') '+${comment}"></span><br />
+                    </div>
+                </div>
+            </div>
+            <div th:if="${product.negCommentsNaiveBayes.empty}" style="font-size: 20px; font-weight: bold;" th:text="${'Негативні коментарі відсутні'}" align="center"></div>
+        </div>
+    </div>
+    <br><br><br>
+    <div class="row">
+        <div class="col" align="center" style="font-size: 20px; font-weight: bold;">Відповідність кількості позитивних та негативних коментарів до дат</div>
+    </div>
+    <div class="row">
+        <div class="col" align="center"><div id="chart_pos_neg" style="height: 480px; width: 1100px;"></div></div>
+    </div>
+    <br><br>
+</div>
+
+<div id="tooltip-goback" class="tooltip-text">На головний екран</div>
+<div th:replace="footer :: footer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4"
+        crossorigin="anonymous">
+</script>
+
+<script>
+    const picgoback = document.getElementById('goback');
+    const tooltipgoback = document.getElementById('tooltip-goback');
+
+    picgoback.addEventListener('mousemove', function (e) {
+        tooltipgoback.style.left = e.pageX + 'px';
+        tooltipgoback.style.top = e.pageY + 20 + 'px';
+        tooltipgoback.style.visibility = 'visible';
+        tooltipgoback.style.opacity = '1';
+    });
+
+    picgoback.addEventListener('mouseleave', function () {
+        tooltipgoback.style.visibility = 'hidden';
+        tooltipgoback.style.opacity = '0';
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var posmaxent = document.getElementById('posMaxEnt');
+        var posnaivebayes = document.getElementById('posNaiveBayes');
+        var negmaxent = document.getElementById('negMaxEnt');
+        var negnaivebayes = document.getElementById('negNaiveBayes');
+
+        if(posmaxent) {
+            posmaxent.addEventListener('click', function() {
+                var div = document.getElementById('posMaxEntBlock');
+
+                if (div.style.display === 'none' || div.style.display === '') {
+                    div.style.display = 'block';
+                } else {
+                    div.style.display = 'none';
+                }
+            });
+        }
+
+        if(posnaivebayes) {
+            posnaivebayes.addEventListener('click', function() {
+                var div = document.getElementById('posNaiveBayesBlock');
+
+                if (div.style.display === 'none' || div.style.display === '') {
+                    div.style.display = 'block';
+                } else {
+                    div.style.display = 'none';
+                }
+            });
+        }
+
+        if(negmaxent) {
+            negmaxent.addEventListener('click', function() {
+                var div = document.getElementById('negMaxEntBlock');
+
+                if (div.style.display === 'none' || div.style.display === '') {
+                    div.style.display = 'block';
+                } else {
+                    div.style.display = 'none';
+                }
+            });
+        }
+
+        if (negnaivebayes) {
+            negnaivebayes.addEventListener('click', function() {
+                var div = document.getElementById('negNaiveBayesBlock');
+
+                if (div.style.display === 'none' || div.style.display === '') {
+                    div.style.display = 'block';
+                } else {
+                    div.style.display = 'none';
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>
