@@ -8,7 +8,9 @@ import opennlp.tools.doccat.DocumentSampleStream;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
 import org.apache.commons.lang3.tuple.Pair;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.FileInputStream;
@@ -24,6 +26,12 @@ public class MaxEntAlgorithm {
     private static final String FILENAME = "train_data.txt";
     private static final String CHARSET = "UTF-8";
     private DoccatModel model;
+    private Util util;
+
+    @Autowired
+    public MaxEntAlgorithm(Util util) {
+        this.util = util;
+    }
 
     @Value("${train-data.language}")
     private String target;
@@ -55,8 +63,9 @@ public class MaxEntAlgorithm {
         }
     }
 
+    @Cacheable(value = "maxEntCache", key = "#param", condition = "#param > 0")
     public Map<String, List<Pair<String, Integer>>> classifyComments(Map<String, List<ProductComment>> productsCommentsMap,
-                                                                     Map<String, List<Pair<String, Integer>>> processedComments) {
+                                                                     Map<String, List<Pair<String, Integer>>> processedComments, int param) {
         DocumentCategorizerME myCategorizer = new DocumentCategorizerME(model);
 
         for (Map.Entry<String, List<Pair<String, Integer>>> entry : processedComments.entrySet()) {
@@ -74,6 +83,6 @@ public class MaxEntAlgorithm {
             }
         }
 
-        return Util.result(productsCommentsMap, processedComments);
+        return util.result(productsCommentsMap, processedComments);
     }
 }

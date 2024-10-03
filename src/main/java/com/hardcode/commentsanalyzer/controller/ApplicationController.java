@@ -30,6 +30,7 @@ public class ApplicationController {
     private NaiveBayesAlgorithm naiveBayesAlgorithm;
     private SearchService searchService;
     private ManualUpdater manualUpdater;
+    private Util util;
 
     @Value("${train-data.language}")
     private String target;
@@ -42,12 +43,14 @@ public class ApplicationController {
                                  MaxEntAlgorithm maxEntAlgorithm,
                                  NaiveBayesAlgorithm naiveBayesAlgorithm,
                                  SearchService searchService,
-                                 ManualUpdater manualUpdater) {
+                                 ManualUpdater manualUpdater,
+                                 Util util) {
         this.sourceCommentsStorage = sourceCommentsStorage;
         this.maxEntAlgorithm = maxEntAlgorithm;
         this.naiveBayesAlgorithm = naiveBayesAlgorithm;
         this.searchService = searchService;
         this.manualUpdater = manualUpdater;
+        this.util = util;
     }
 
     @GetMapping("/")
@@ -55,7 +58,7 @@ public class ApplicationController {
         return forMainPageAndSearch(model,
                 searchService.getPage(sourceCommentsStorage.getProductsCommentsMap(), page),
                 true,
-                "Товари не знайдено, щось пішло не так");
+                "Товари не знайдено, щось пішло не так", page);
     }
 
     @GetMapping("/search")
@@ -67,7 +70,7 @@ public class ApplicationController {
             return forMainPageAndSearch(model,
                     searchService.getBySearchString(sourceCommentsStorage.getProductsCommentsMap(), searchKeyword),
                     false,
-                    "Товари не знайдено");
+                    "Товари не знайдено", -1);
         }
     }
 
@@ -97,11 +100,15 @@ public class ApplicationController {
 
         Map<String, List<ProductComment>> productMap = new TreeMap<>();
         productMap.put(productFullInfo, sourceCommentsStorage.getProductsCommentsMap().get(productFullInfo));
-        Map<String, List<Pair<String, Integer>>> commentsAfterInitMaxEnt = Util.init(productMap, new TreeMap<>(), source, target);
-        Map<String, List<Pair<String, Integer>>> commentsAfterInitNaiveBayes = Util.init(productMap, new TreeMap<>(), source, target);
+        Map<String, List<Pair<String, Integer>>> commentsAfterInitMaxEnt = util.init(productMap, new TreeMap<>(), source, target, Math.abs(productFullInfo.hashCode()));
+        Map<String, List<Pair<String, Integer>>> commentsAfterInitNaiveBayes = new TreeMap<>();
+        for (Map.Entry<String, List<Pair<String, Integer>>> entry : commentsAfterInitMaxEnt.entrySet()) {
+            List<Pair<String, Integer>> copiedList = new ArrayList<>(entry.getValue());
+            commentsAfterInitNaiveBayes.put(entry.getKey(), copiedList);
+        }
 
-        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysisMaxEnt = maxEntAlgorithm.classifyComments(productMap, commentsAfterInitMaxEnt);
-        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysisNaiveBayes = naiveBayesAlgorithm.classifyComments(productMap, commentsAfterInitNaiveBayes);
+        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysisMaxEnt = maxEntAlgorithm.classifyComments(productMap, commentsAfterInitMaxEnt, Math.abs(productFullInfo.hashCode()));
+        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysisNaiveBayes = naiveBayesAlgorithm.classifyComments(productMap, commentsAfterInitNaiveBayes, Math.abs(productFullInfo.hashCode()));
         int posNumberMaxEnt = countPosComments(commentsAfterAnalysisMaxEnt.get(productFullInfo), product.getPosCommentsMaxEnt(), product.getNegCommentsMaxEnt());
         int posNumberNaiveBayes = countPosComments(commentsAfterAnalysisNaiveBayes.get(productFullInfo), product.getPosCommentsNaiveBayes(), product.getNegCommentsNaiveBayes());
 
@@ -133,18 +140,18 @@ public class ApplicationController {
         model.addAttribute("posNumberNaiveBayes", posNumberNaiveBayes);
         model.addAttribute("negNumberNaiveBayes", product.getTotalQuantityComments() - posNumberNaiveBayes);
         model.addAttribute("product", product);
-        model.addAttribute("lastUpdated", Util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
+        model.addAttribute("lastUpdated", util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
         model.addAttribute("commentsData", convertMapToJson(chart));
         model.addAttribute("posNumberDate", convertMapToJson(posNumberDate));
         model.addAttribute("negNumberDate", convertMapToJson(negNumberDate));
         return "productpage";
     }
 
-    private String forMainPageAndSearch(Model model, Map<String, List<ProductComment>> productsCommentsMap, boolean flag, String errorMsg) {
+    private String forMainPageAndSearch(Model model, Map<String, List<ProductComment>> productsCommentsMap, boolean flag, String errorMsg, int pageCache) {
         List<ProductForMainView> products = new ArrayList<>();
 
-        Map<String, List<Pair<String, Integer>>> commentsAfterInit = Util.init(productsCommentsMap, new TreeMap<>(), source, target);
-        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysis = maxEntAlgorithm.classifyComments(productsCommentsMap, commentsAfterInit);
+        Map<String, List<Pair<String, Integer>>> commentsAfterInit = util.init(productsCommentsMap, new TreeMap<>(), source, target, pageCache);
+        Map<String, List<Pair<String, Integer>>> commentsAfterAnalysis = maxEntAlgorithm.classifyComments(productsCommentsMap, commentsAfterInit, pageCache);
 
         for (Map.Entry<String, List<Pair<String, Integer>>> entry : commentsAfterAnalysis.entrySet()) {
             List<ProductComment> productComments = sourceCommentsStorage.getProductsCommentsMap().get(entry.getKey());
@@ -177,7 +184,7 @@ public class ApplicationController {
         model.addAttribute("flag", flag);
         model.addAttribute("errorMsg", errorMsg);
         model.addAttribute("products", products);
-        model.addAttribute("lastUpdated", Util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
+        model.addAttribute("lastUpdated", util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
         model.addAttribute("pages", pages);
         return "mainpage";
     }

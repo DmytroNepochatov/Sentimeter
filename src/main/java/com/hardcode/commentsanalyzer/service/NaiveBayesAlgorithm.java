@@ -25,6 +25,8 @@ import org.apache.mahout.math.RandomAccessSparseVector;
 import org.apache.mahout.math.Vector;
 import org.apache.mahout.vectorizer.SparseVectorsFromSequenceFiles;
 import org.apache.mahout.vectorizer.TFIDF;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
@@ -44,8 +46,11 @@ public class NaiveBayesAlgorithm {
     private static final String DOCUMENT_FREQUENCY_PATH = "input/comments-vectors/df-count/part-r-00000";
     private static final String FILENAME = "train_data.txt";
     private Configuration configuration;
+    private Util util;
 
-    public NaiveBayesAlgorithm() {
+    @Autowired
+    public NaiveBayesAlgorithm(Util util) {
+        this.util = util;
         this.configuration = new Configuration();
     }
 
@@ -110,8 +115,9 @@ public class NaiveBayesAlgorithm {
         return documentFrequency;
     }
 
+    @Cacheable(value = "naiveBayesCache", key = "#param")
     public Map<String, List<Pair<String, Integer>>> classifyComments(Map<String, List<ProductComment>> productsCommentsMap,
-                                                                     Map<String, List<Pair<String, Integer>>> processedComments) {
+                                                                     Map<String, List<Pair<String, Integer>>> processedComments, int param) {
         Map<String, Integer> dictionary = readDictionary(configuration, new Path(DICTIONARY_PATH));
         Map<Integer, Long> documentFrequency = readDocumentFrequency(configuration, new Path(DOCUMENT_FREQUENCY_PATH));
         Multiset<String> words = ConcurrentHashMultiset.create();
@@ -187,6 +193,6 @@ public class NaiveBayesAlgorithm {
             }
         }
 
-        return Util.result(productsCommentsMap, processedComments);
+        return util.result(productsCommentsMap, processedComments);
     }
 }

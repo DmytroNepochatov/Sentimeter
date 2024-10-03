@@ -8,7 +8,9 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.tuple.Pair;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.*;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
@@ -21,7 +23,8 @@ import java.time.ZonedDateTime;
 import java.util.*;
 
 @Slf4j
-public final class Util {
+@Component
+public class Util {
     private static final String FILENAME = "output.csv";
     private static final String DATE_PATTERN_GET = "dd.M.yyyy";
     private static final String TIME_PATTERN_GET = "HH:mm:ss";
@@ -32,10 +35,7 @@ public final class Util {
     private static final String URL = "http://translator:5000/translate";
     private static final String GET_DATA_SCRIPT = "./get_data_script.sh";
 
-    private Util() {
-    }
-
-    public static Map<String, List<ProductComment>> readProductsCommentsFromCSVFile() {
+    public Map<String, List<ProductComment>> readProductsCommentsFromCSVFile() {
         Map<String, List<ProductComment>> productsCommentsMap = new TreeMap<>();
 
         try {
@@ -63,7 +63,7 @@ public final class Util {
         return productsCommentsMap;
     }
 
-    public static String createStringDateFromClassDate(Date date) {
+    public String createStringDateFromClassDate(Date date) {
         Instant instant = date.toInstant();
         ZonedDateTime dateTime = instant.atZone(ZoneId.systemDefault());
         ZonedDateTime newDateTime = dateTime.plus(Duration.ofHours(3));
@@ -72,11 +72,11 @@ public final class Util {
         return FORMATTER_GET.format(newDate) + " в " + TIME_FORMATTER_GET.format(newDate);
     }
 
-    public static Date createDateClassFromStringDate(String date) throws ParseException {
+    public Date createDateClassFromStringDate(String date) throws ParseException {
         return FORMATTER_SET.parse(date);
     }
 
-    public static List<String> translate(String comments, String source, String target) throws JsonProcessingException {
+    public List<String> translate(String comments, String source, String target) throws JsonProcessingException {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -101,8 +101,9 @@ public final class Util {
         return Arrays.asList(translatedText.split("\n"));
     }
 
-    public static Map<String, List<Pair<String, Integer>>> init(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments,
-                                                                String source, String target) {
+    @Cacheable(value = "initCache", key = "#param")
+    public Map<String, List<Pair<String, Integer>>> init(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments,
+                                                         String source, String target, int param) {
         for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
 
             StringBuilder commentsForTranslate = new StringBuilder();
@@ -113,7 +114,7 @@ public final class Util {
             List<Pair<String, Integer>> commentsPairs = new ArrayList<>();
 
             try {
-                for (String str : Util.translate(commentsForTranslate.toString(), source, target)) {
+                for (String str : translate(commentsForTranslate.toString(), source, target)) {
                     commentsPairs.add(Pair.of(str
                                     .replaceAll("[^\\p{L}\\s]+", "")
                                     .replaceAll("\\s+", " ")
@@ -132,7 +133,7 @@ public final class Util {
         return processedComments;
     }
 
-    public static Map<String, List<Pair<String, Integer>>> result(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments) {
+    public Map<String, List<Pair<String, Integer>>> result(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments) {
         for (Map.Entry<String, List<Pair<String, Integer>>> entry : processedComments.entrySet()) {
             List<ProductComment> productComments = productsCommentsMap.get(entry.getKey());
             for (int i = 0; i < entry.getValue().size(); i++) {
@@ -144,7 +145,7 @@ public final class Util {
         return processedComments;
     }
 
-    public static void startScript() {
+    public void startScript() {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder(GET_DATA_SCRIPT);
             processBuilder.directory(new java.io.File("."));
