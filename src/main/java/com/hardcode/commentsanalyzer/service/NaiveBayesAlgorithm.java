@@ -78,7 +78,7 @@ public class NaiveBayesAlgorithm {
 
     private void sequenceFileToSparseVector() throws Exception {
         SparseVectorsFromSequenceFiles svfsf = new SparseVectorsFromSequenceFiles();
-        svfsf.run(new String[]{"-i", SEQUENCE_FILE_PATH, "-o", VECTORS_PATH, "-ow"});
+        svfsf.run(new String[]{"-i", SEQUENCE_FILE_PATH, "-o", VECTORS_PATH, "-ow", "-s", "3", "-x", "15", "-ng", "6"});
     }
 
     @PostConstruct
@@ -149,7 +149,7 @@ public class NaiveBayesAlgorithm {
                     tokenStream.close();
 
                     int documentCount = documentFrequency.get(-1).intValue();
-                    Vector vector = new RandomAccessSparseVector(10000);
+                    Vector vector = new RandomAccessSparseVector(20000);
                     TFIDF tfidf = new TFIDF();
 
                     for (Multiset.Entry<String> entryWord : words.entrySet()) {
