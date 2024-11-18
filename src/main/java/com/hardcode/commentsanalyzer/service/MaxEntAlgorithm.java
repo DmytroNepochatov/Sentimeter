@@ -13,16 +13,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class MaxEntAlgorithm {
-    private static final int CUTOFF = 2;
-    private static final int TRAINING_ITERATIONS = 2000;
+    private static final String MODEL_PATH = "maxentmodel/model.bin";
     private static final String FILENAME = "train_data.txt";
     private static final String CHARSET = "UTF-8";
     private DoccatModel model;
@@ -36,28 +33,40 @@ public class MaxEntAlgorithm {
     @Value("${train-data.language}")
     private String target;
 
+    @Value("${maxent.variable.cutoff}")
+    private int cutoff;
+
+    @Value("${maxent.variable.training-iterations}")
+    private int trainingIterations;
+
     @PostConstruct
     protected void trainModel() {
-        InputStream dataIn = null;
+        model = loadModel();
 
-        try {
-            dataIn = new FileInputStream(FILENAME);
-            ObjectStream lineStream = new PlainTextByLineStream(dataIn, CHARSET);
-            ObjectStream sampleStream = new DocumentSampleStream(lineStream);
+        if (model == null) {
+            InputStream dataIn = null;
 
-            model = DocumentCategorizerME.train(target, sampleStream, CUTOFF,
-                    TRAINING_ITERATIONS);
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            if (dataIn != null) {
-                try {
-                    dataIn.close();
-                }
-                catch (IOException e) {
-                    e.printStackTrace();
+            try {
+                dataIn = new FileInputStream(FILENAME);
+                ObjectStream lineStream = new PlainTextByLineStream(dataIn, CHARSET);
+                ObjectStream sampleStream = new DocumentSampleStream(lineStream);
+
+                model = DocumentCategorizerME.train(target, sampleStream, cutoff,
+                        trainingIterations);
+
+                saveModel(model);
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+            finally {
+                if (dataIn != null) {
+                    try {
+                        dataIn.close();
+                    }
+                    catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
@@ -84,5 +93,30 @@ public class MaxEntAlgorithm {
         }
 
         return util.result(productsCommentsMap, processedComments);
+    }
+
+    private void saveModel(DoccatModel model) {
+        try {
+            File directory = new File("maxentmodel");
+            if (!directory.exists()) {
+                directory.mkdirs();
+            }
+
+            try (FileOutputStream outputStream = new FileOutputStream(MODEL_PATH)) {
+                model.serialize(outputStream);
+            }
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private DoccatModel loadModel() {
+        try (FileInputStream inputStream = new FileInputStream(MODEL_PATH)) {
+            return new DoccatModel(inputStream);
+        }
+        catch (IOException e) {
+            return null;
+        }
     }
 }

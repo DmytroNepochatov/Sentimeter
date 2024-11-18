@@ -10,6 +10,11 @@ services:
     environment:
       - TRAIN_DATA_LANGUAGE=en
       - INPUT_COMMENTS_LANGUAGE=uk
+      - CUTOFF=2
+      - TRAINING_ITERATIONS=2000
+      - MIN_SUPPORT=3
+      - MAX_DF_PERCENT=15
+      - MAX_NGRAM_SIZE=6
     networks:
       - my_network
     depends_on:

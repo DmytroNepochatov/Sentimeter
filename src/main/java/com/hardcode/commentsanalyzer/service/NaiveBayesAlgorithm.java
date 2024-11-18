@@ -26,6 +26,7 @@ import org.apache.mahout.math.Vector;
 import org.apache.mahout.vectorizer.SparseVectorsFromSequenceFiles;
 import org.apache.mahout.vectorizer.TFIDF;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
@@ -47,6 +48,15 @@ public class NaiveBayesAlgorithm {
     private static final String FILENAME = "train_data.txt";
     private Configuration configuration;
     private Util util;
+
+    @Value("${naivebayes.variable.min-support}")
+    private int minSupport;
+
+    @Value("${naivebayes.variable.max-df-percent}")
+    private int maxDFPercent;
+
+    @Value("${naivebayes.variable.max-ngram-size}")
+    private int maxNGramSize;
 
     @Autowired
     public NaiveBayesAlgorithm(Util util) {
@@ -78,10 +88,40 @@ public class NaiveBayesAlgorithm {
 
     private void sequenceFileToSparseVector() throws Exception {
         SparseVectorsFromSequenceFiles svfsf = new SparseVectorsFromSequenceFiles();
-        svfsf.run(new String[]{"-i", SEQUENCE_FILE_PATH, "-o", VECTORS_PATH, "-ow", "-s", "3", "-x", "15", "-ng", "6"});
+        svfsf.run(new String[]{"-i", SEQUENCE_FILE_PATH, "-o", VECTORS_PATH, "-ow", "-s", Integer.toString(minSupport),
+                "-x", Integer.toString(maxDFPercent), "-ng", Integer.toString(maxNGramSize)});
     }
 
     @PostConstruct
+    private void initializeModel() throws Exception {
+        if (isModelSaved()) {
+            loadNaiveBayesModel();
+        }
+        else {
+            trainNaiveBayesModel();
+        }
+    }
+
+    private boolean isModelSaved() {
+        try {
+            FileSystem fileSystem = FileSystem.getLocal(configuration);
+            Path modelPath = new Path(MODEL_PATH);
+            return fileSystem.exists(modelPath);
+        }
+        catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void loadNaiveBayesModel() {
+        try {
+            NaiveBayesModel model = NaiveBayesModel.materialize(new Path(MODEL_PATH), configuration);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private void trainNaiveBayesModel() throws Exception {
         inputDataToSequenceFile();
         sequenceFileToSparseVector();
