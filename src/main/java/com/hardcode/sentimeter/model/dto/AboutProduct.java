@@ -1,4 +1,4 @@
-package com.hardcode.commentsanalyzer.model.dto;
+package com.hardcode.sentimeter.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -16,8 +16,8 @@ public class AboutProduct {
     private int totalQuantityComments;
     private String positivePercentageMaxEnt;
     private String positivePercentageNaiveBayes;
-    private List<String> posCommentsMaxEnt;
-    private List<String> negCommentsMaxEnt;
-    private List<String> posCommentsNaiveBayes;
-    private List<String> negCommentsNaiveBayes;
+    private List<ProductCommentForFullInfo> posCommentsMaxEnt;
+    private List<ProductCommentForFullInfo> negCommentsMaxEnt;
+    private List<ProductCommentForFullInfo> posCommentsNaiveBayes;
+    private List<ProductCommentForFullInfo> negCommentsNaiveBayes;
 }

@@ -1,17 +1,18 @@
 version: '3.8'
 
 services:
-  comments_analyzer:
-    container_name: comments_analyzer
-    image: comments-analyzer-image:1.0
+  sentimeter:
+    container_name: sentimeter
+    image: sentimeter-image:1.0
     build: .
     ports:
       - "8877:8877"
     environment:
       - TRAIN_DATA_LANGUAGE=en
-      - INPUT_COMMENTS_LANGUAGE=uk
+      - INPUT_COMMENTS_LANGUAGE=uk,pl,de
+      - LANGUAGE_COMMENTS_IN_REPORT=uk
       - CUTOFF=2
-      - TRAINING_ITERATIONS=2000
+      - TRAINING_ITERATIONS=67866
       - MIN_SUPPORT=3
       - MAX_DF_PERCENT=15
       - MAX_NGRAM_SIZE=6
@@ -26,8 +27,8 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - LANGUAGES=en,uk
-      - LT_LOAD_ONLY=en,uk
+      - LANGUAGES=en,uk,pl,de
+      - LT_LOAD_ONLY=en,uk,pl,de
     networks:
       - my_network
 

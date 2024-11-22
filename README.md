@@ -1,40 +1,49 @@
-# Sentimeter – сервіс з аналізу настроїв клієнтів до продуктів
+# Sentimeter – service for analyzing customer attitudes towards products
 
-## Опис сервісу
+## Service description
 
-Даний сервіс виступає окремим додатком для моніторингу та аналізу настроїв клієнтів у сфері електронної комерції. Для зручності використання сервіс розгортається у Docker контейнері.
+This service is a separate application for monitoring and analyzing customer sentiments in the field of e-commerce. For ease of use, the service is deployed in a Docker container.
 
-## Як під'єнати Sentimeter до власного сервісу з електронної комерції
+## How to connect Sentimeter to your own e-commerce service
 
-1. Необхідно мати встановлений Docker;
-2. Запустити docker-compose.yml файл, де необхідно вказати мову коментарів та мову dataset для навчання алгоритмів ML, та мови для перекладача:
+1. You must have Docker installed;
+2. Run the docker-compose.yml file, where you need to specify the comment language and the dataset language for training ML algorithms, and the language for the translator:
     - TRAIN_DATA_LANGUAGE=
     - INPUT_COMMENTS_LANGUAGE=
-    - LANGUAGES=,
-    - LT_LOAD_ONLY=,
-3. У разі успішного запуску контейнер з сервісом буде очікувати скрипт для отримання списку коментарів та тренувальний dataset:
+    - LANGUAGES=
+    - LT_LOAD_ONLY= 
+
+   In addition, it is necessary to specify the parameters for the model of the maximum entropy algorithm:
+    - CUTOFF=
+    - TRAINING_ITERATIONS=
+
+   And for the naive Bayes algorithm model:
+    - MIN_SUPPORT=
+    - MAX_DF_PERCENT=
+    - MAX_NGRAM_SIZE=
+3. In case of successful launch, the container with the service will expect a script to get a list of comments and a training dataset:
     ![img.png](mdphoto/img.png)
-4. Далі необхідно у директорію /usr/local/bin/ вставити тренувальний dataset файл під назвою train_data.txt із власною предметною областю, дані у якому будуть мати вигляд такий самий як у прикладі у вихідних файлах, де 1 (Позитивний коментар) 0 (Негативний коментар), а також дані речення повинні бути приведені до нижнього регістра та бути лише слова без будь-яких розділових знаків;
-5. Також, в цю директорію необхідно вставити скрипт get_data_script.sh який будет зчитувати коментарі із бази даних сервісу з електронної комерції, приклад скрипту наведено у вихідних файлах, необхідно зазначити, що Sentimeter початково працює лише із БД типу PostgreSQL, для роботи із іншими типами БД необхідно вказати у Dockerfile відповідні клієнти ДБ, крім того даний скрипт повинен повертати результат такого типу:
+4. Next, it is necessary to insert a training dataset file called train_data.txt with its own subject area into the usrlocalbin directory, the data in which will have the same form as in the example in the source files, where 1 (Positive comment) 0 (Negative comment), as well as sentence data must be lowercase and be only words without any punctuation marks;
+5. Also, in this directory it is necessary to insert the script get_data_script.sh which will read comments from the database of the e-commerce service, an example of the script is given in the source files, it should be noted that Sentimeter initially works only with a PostgreSQL database, to work with other types of databases it is necessary specify the appropriate DB clients in the Dockerfile, in addition, this script should return a result of the following type:
     ![img_1.png](mdphoto/img_1.png)
-6. У разі успішного виконання скрипту для отримання коментарів у терміналі контейнеру сервіса буде вказано наступне:
+6. If the script for receiving comments is successfully executed, the following will be indicated in the terminal of the service container:
     ![img_2.png](mdphoto/img_2.png)
-7. Почекати, поки моделі навчаться на тренувальних даних, а також повністю встановиться та почне працювати контейнер із перекладачем;
-8. Для зручності тестування сервісу є скрипти run.sh та clear.sh, що допомогають запустити та завершити роботу сервісу;
-9. Для повного тестування Sentimeter рекомендую розгорнути мій сервіс з електронної комерції: https://github.com/DmytroNepochatov/Phone-shop в одній мережі Docker.
+7. Wait until the models are trained on the training data, and the container with the translator is fully installed and running;
+8. For the convenience of testing the service, there are run.sh and clear.sh scripts that help start and stop the service;
+9. For full testing of Sentimeter, I recommend deploying my e-commerce service: https://github.com/DmytroNepochatov/Phone-shop in the same Docker network.
 
-## Функціонал Sentimeter
+## Sentimeter functionality
 
-Головна сторінка сервісу являє собою список продуктів для яких проводився аналіз настроїв:
+The main page of the service is a list of products for which sentiment analysis was conducted:
     ![img_3.png](mdphoto/img_3.png)
-Крім того є можливість пошуку за назвою продукту.
-Також оновлення даних відбувається або вручну за допомогою кнопки у правому верхньому кутку, або самостійно кожні 4 години за допомогою Spring Scheduler.
-Якщо перейти в детальну інформацію продукту, то можна побачити графік відповідності кількості коментарів до дат, оцінку товарів від користувачів, а також відсоток позитивних коментарів, що було визначено за допомогою двох алгоритмів: алгоритму максимальної ентропії та наївного алгоритму Байєса:
+In addition, it is possible to search by product name.
+Also, the data is updated either manually using the button in the upper right corner, or independently every 4 hours using the Spring Scheduler.
+If you go to the detailed information of the product, you can see a graph of the correspondence of the number of comments to the dates, the evaluation of products by users, as well as the percentage of positive comments, which was determined using two algorithms: the maximum entropy algorithm and the naive Bayes algorithm:
     ![img_4.png](mdphoto/img_4.png)
-Нижче на сторінці наведено графіки роботи обох алгоритмів, а також класифікацію коментарів на негативні та позитивні:
+Below on the page, you can choose an algorithm, after choosing which the page will display a graph of positive and negative reviews, as well as their lists:
     ![img_5.png](mdphoto/img_5.png)
     ![img_6.png](mdphoto/img_6.png)
     ![img_7.png](mdphoto/img_7.png)
-Після, йде графік відповідності кількості позитивних та негативних коментарів до дат:
+After that, there is a schedule of correspondence of the number of positive and negative comments to the dates:
     ![img_8.png](mdphoto/img_8.png)
     

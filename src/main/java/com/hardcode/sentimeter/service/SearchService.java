@@ -1,6 +1,6 @@
-package com.hardcode.commentsanalyzer.service;
+package com.hardcode.sentimeter.service;
 
-import com.hardcode.commentsanalyzer.model.ProductComment;
+import com.hardcode.sentimeter.model.ProductComment;
 import org.springframework.stereotype.Service;
 import java.util.*;
 

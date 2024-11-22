@@ -70,17 +70,17 @@
             <ul class="nav navbar-nav">
                 <li class="nav-item">
                     <form class="d-flex" th:action="@{/search}" method="get">
-                        <input class="form-control me-2" type="search" placeholder="Назва продукту"
+                        <input class="form-control me-2" type="search" placeholder="Product name"
                                aria-label="Search" name="searchKeyword" th:value="${searchKeyword}">
                         <button class="btn btn-outline-light" type="submit">
-                            Пошук
+                            Search
                         </button>
                     </form>
                 </li>
             </ul>
             <ul class="nav navbar-nav">
                 <li class="nav-item">
-                    <div style="color: white; font-size: 19px;" th:text="${'Останнє оновлення '+ lastUpdated}"></div>
+                    <div style="color: white; font-size: 19px;" th:text="${'Latest update '+ lastUpdated}"></div>
                 </li>
             </ul>
             <ul class="nav navbar-nav">
@@ -93,7 +93,7 @@
         </div>
     </nav>
 
-    <div id="tooltip" class="tooltip-text">Виконати оновлення даних</div>
+    <div id="tooltip" class="tooltip-text">Perform data update</div>
 
     <script>
         const pic = document.getElementById('update');

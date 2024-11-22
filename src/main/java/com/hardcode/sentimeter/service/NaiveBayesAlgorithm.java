@@ -1,10 +1,8 @@
-package com.hardcode.commentsanalyzer.service;
+package com.hardcode.sentimeter.service;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.hardcode.commentsanalyzer.model.ProductComment;
-import com.hardcode.commentsanalyzer.util.Util;
-import org.apache.commons.lang3.tuple.Pair;
+import com.hardcode.sentimeter.model.ProductComment;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -25,9 +23,7 @@ import org.apache.mahout.math.RandomAccessSparseVector;
 import org.apache.mahout.math.Vector;
 import org.apache.mahout.vectorizer.SparseVectorsFromSequenceFiles;
 import org.apache.mahout.vectorizer.TFIDF;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
@@ -47,7 +43,6 @@ public class NaiveBayesAlgorithm {
     private static final String DOCUMENT_FREQUENCY_PATH = "input/comments-vectors/df-count/part-r-00000";
     private static final String FILENAME = "train_data.txt";
     private Configuration configuration;
-    private Util util;
 
     @Value("${naivebayes.variable.min-support}")
     private int minSupport;
@@ -58,9 +53,7 @@ public class NaiveBayesAlgorithm {
     @Value("${naivebayes.variable.max-ngram-size}")
     private int maxNGramSize;
 
-    @Autowired
-    public NaiveBayesAlgorithm(Util util) {
-        this.util = util;
+    public NaiveBayesAlgorithm() {
         this.configuration = new Configuration();
     }
 
@@ -155,84 +148,82 @@ public class NaiveBayesAlgorithm {
         return documentFrequency;
     }
 
-    @Cacheable(value = "naiveBayesCache", key = "#param")
-    public Map<String, List<Pair<String, Integer>>> classifyComments(Map<String, List<ProductComment>> productsCommentsMap,
-                                                                     Map<String, List<Pair<String, Integer>>> processedComments, int param) {
+    public void classifyComments(Map<String, List<ProductComment>> productsCommentsMap) {
         Map<String, Integer> dictionary = readDictionary(configuration, new Path(DICTIONARY_PATH));
         Map<Integer, Long> documentFrequency = readDocumentFrequency(configuration, new Path(DOCUMENT_FREQUENCY_PATH));
         Multiset<String> words = ConcurrentHashMultiset.create();
 
-        for (Map.Entry<String, List<Pair<String, Integer>>> entry : processedComments.entrySet()) {
+        for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
             for (int i = 0; i < entry.getValue().size(); i++) {
-                String text = entry.getValue().get(i).getKey();
+                if (!entry.getValue().get(i).getDescriptionTranslated().isEmpty()
+                        && entry.getValue().get(i).getTonalityNaiveBayes() == -1) {
+                    try {
+                        Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_46);
+                        TokenStream tokenStream = analyzer.tokenStream("comment",
+                                new StringReader(entry.getValue().get(i).getDescriptionTranslated()));
+                        CharTermAttribute termAttribute = tokenStream.addAttribute(CharTermAttribute.class);
+                        tokenStream.reset();
 
-                try {
-                    Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_46);
-                    TokenStream tokenStream = analyzer.tokenStream("comment", new StringReader(text));
-                    CharTermAttribute termAttribute = tokenStream.addAttribute(CharTermAttribute.class);
-                    tokenStream.reset();
+                        int wordCount = 0;
+                        while (tokenStream.incrementToken()) {
+                            if (termAttribute.length() > 0) {
+                                String word = tokenStream.getAttribute(CharTermAttribute.class).toString();
+                                Integer wordId = dictionary.get(word);
 
-                    int wordCount = 0;
-                    while (tokenStream.incrementToken()) {
-                        if (termAttribute.length() > 0) {
-                            String word = tokenStream.getAttribute(CharTermAttribute.class).toString();
-                            Integer wordId = dictionary.get(word);
-
-                            if (wordId != null) {
-                                words.add(word);
-                                wordCount++;
+                                if (wordId != null) {
+                                    words.add(word);
+                                    wordCount++;
+                                }
                             }
                         }
-                    }
 
-                    tokenStream.end();
-                    tokenStream.close();
+                        tokenStream.end();
+                        tokenStream.close();
 
-                    int documentCount = documentFrequency.get(-1).intValue();
-                    Vector vector = new RandomAccessSparseVector(20000);
-                    TFIDF tfidf = new TFIDF();
+                        int documentCount = documentFrequency.get(-1).intValue();
+                        Vector vector = new RandomAccessSparseVector(20000);
+                        TFIDF tfidf = new TFIDF();
 
-                    for (Multiset.Entry<String> entryWord : words.entrySet()) {
-                        String word = entryWord.getElement();
-                        int count = entryWord.getCount();
-                        Integer wordId = dictionary.get(word);
-                        Long freq = documentFrequency.get(wordId);
-                        double tfIdfValue = tfidf.calculate(count, freq.intValue(), wordCount, documentCount);
-                        vector.setQuick(wordId, tfIdfValue);
-                    }
-
-                    NaiveBayesModel model = NaiveBayesModel.materialize(new Path(MODEL_PATH), configuration);
-                    StandardNaiveBayesClassifier classifier = new StandardNaiveBayesClassifier(model);
-
-                    Vector resultVector = classifier.classifyFull(vector);
-                    double bestScore = -Double.MAX_VALUE;
-                    int bestCategoryId = -1;
-
-                    for (Vector.Element element : resultVector.all()) {
-                        int categoryId = element.index();
-                        double score = element.get();
-
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestCategoryId = categoryId;
+                        for (Multiset.Entry<String> entryWord : words.entrySet()) {
+                            String word = entryWord.getElement();
+                            int count = entryWord.getCount();
+                            Integer wordId = dictionary.get(word);
+                            Long freq = documentFrequency.get(wordId);
+                            double tfIdfValue = tfidf.calculate(count, freq.intValue(), wordCount, documentCount);
+                            vector.setQuick(wordId, tfIdfValue);
                         }
-                    }
 
-                    if (bestCategoryId == 1) {
-                        entry.getValue().set(i, Pair.of(text, 1));
-                    }
-                    else {
-                        entry.getValue().set(i, Pair.of(text, 0));
-                    }
+                        NaiveBayesModel model = NaiveBayesModel.materialize(new Path(MODEL_PATH), configuration);
+                        StandardNaiveBayesClassifier classifier = new StandardNaiveBayesClassifier(model);
 
-                    analyzer.close();
-                }
-                catch (Exception e) {
-                    e.printStackTrace();
+                        Vector resultVector = classifier.classifyFull(vector);
+                        double bestScore = -Double.MAX_VALUE;
+                        int bestCategoryId = -1;
+
+                        for (Vector.Element element : resultVector.all()) {
+                            int categoryId = element.index();
+                            double score = element.get();
+
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestCategoryId = categoryId;
+                            }
+                        }
+
+                        if (bestCategoryId == 1) {
+                            entry.getValue().get(i).setTonalityNaiveBayes(1);
+                        }
+                        else {
+                            entry.getValue().get(i).setTonalityNaiveBayes(0);
+                        }
+
+                        analyzer.close();
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
-
-        return util.result(productsCommentsMap, processedComments);
     }
 }

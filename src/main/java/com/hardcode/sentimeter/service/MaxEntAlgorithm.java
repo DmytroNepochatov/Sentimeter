@@ -1,16 +1,12 @@
-package com.hardcode.commentsanalyzer.service;
+package com.hardcode.sentimeter.service;
 
-import com.hardcode.commentsanalyzer.model.ProductComment;
-import com.hardcode.commentsanalyzer.util.Util;
+import com.hardcode.sentimeter.model.ProductComment;
 import opennlp.tools.doccat.DoccatModel;
 import opennlp.tools.doccat.DocumentCategorizerME;
 import opennlp.tools.doccat.DocumentSampleStream;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
-import org.apache.commons.lang3.tuple.Pair;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import javax.annotation.PostConstruct;
 import java.io.*;
@@ -23,12 +19,6 @@ public class MaxEntAlgorithm {
     private static final String FILENAME = "train_data.txt";
     private static final String CHARSET = "UTF-8";
     private DoccatModel model;
-    private Util util;
-
-    @Autowired
-    public MaxEntAlgorithm(Util util) {
-        this.util = util;
-    }
 
     @Value("${train-data.language}")
     private String target;
@@ -72,27 +62,25 @@ public class MaxEntAlgorithm {
         }
     }
 
-    @Cacheable(value = "maxEntCache", key = "#param", condition = "#param > 0")
-    public Map<String, List<Pair<String, Integer>>> classifyComments(Map<String, List<ProductComment>> productsCommentsMap,
-                                                                     Map<String, List<Pair<String, Integer>>> processedComments, int param) {
+    public void classifyComments(Map<String, List<ProductComment>> productsCommentsMap) {
         DocumentCategorizerME myCategorizer = new DocumentCategorizerME(model);
 
-        for (Map.Entry<String, List<Pair<String, Integer>>> entry : processedComments.entrySet()) {
+        for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
             for (int i = 0; i < entry.getValue().size(); i++) {
-                String text = entry.getValue().get(i).getKey();
-                double[] outcomes = myCategorizer.categorize(entry.getValue().get(i).getKey().split(" "));
-                String category = myCategorizer.getBestCategory(outcomes);
+                if (!entry.getValue().get(i).getDescriptionTranslated().isEmpty()
+                        && entry.getValue().get(i).getTonalityMaxEnt() == -1) {
+                    double[] outcomes = myCategorizer.categorize(entry.getValue().get(i).getDescriptionTranslated().split(" "));
+                    String category = myCategorizer.getBestCategory(outcomes);
 
-                if (category.equalsIgnoreCase("1")) {
-                    entry.getValue().set(i, Pair.of(text, 1));
-                }
-                else {
-                    entry.getValue().set(i, Pair.of(text, 0));
+                    if (category.equalsIgnoreCase("1")) {
+                        entry.getValue().get(i).setTonalityMaxEnt(1);
+                    }
+                    else {
+                        entry.getValue().get(i).setTonalityMaxEnt(0);
+                    }
                 }
             }
         }
-
-        return util.result(productsCommentsMap, processedComments);
     }
 
     private void saveModel(DoccatModel model) {

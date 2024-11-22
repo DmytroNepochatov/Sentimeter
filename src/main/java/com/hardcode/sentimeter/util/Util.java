@@ -1,14 +1,15 @@
-package com.hardcode.commentsanalyzer.util;
+package com.hardcode.sentimeter.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hardcode.commentsanalyzer.model.ProductComment;
+import com.hardcode.sentimeter.model.ProductComment;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.commons.lang3.tuple.Pair;
-import org.springframework.cache.annotation.Cacheable;
+import org.apache.tika.language.detect.LanguageDetector;
+import org.apache.tika.language.detect.LanguageResult;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -35,6 +36,15 @@ public class Util {
     private static final String URL = "http://translator:5000/translate";
     private static final String GET_DATA_SCRIPT = "./get_data_script.sh";
 
+    @Value("${train-data.language}")
+    private String target;
+
+    @Value("${input-comments.language}")
+    private String[] source;
+
+    @Value("${ui.language.comments}")
+    private String commentLang;
+
     public Map<String, List<ProductComment>> readProductsCommentsFromCSVFile() {
         Map<String, List<ProductComment>> productsCommentsMap = new TreeMap<>();
 
@@ -43,11 +53,19 @@ public class Util {
                     StandardCharsets.UTF_8,
                     CSVFormat.DEFAULT);
 
+            LanguageDetector detector = LanguageDetector.getDefaultLanguageDetector();
+            detector.loadModels();
+
             for (CSVRecord record : parser) {
-                String model = record.get(0);
-                ProductComment comment = new ProductComment(record.get(1),
-                        createDateClassFromStringDate(record.get(2).split(" ")[0]),
-                        Integer.parseInt(record.get(3)));
+                String model = record.get(1);
+                String description = record.get(2);
+
+                LanguageResult result = detector.detect(description);
+                String locale = result.getLanguage();
+
+                ProductComment comment = new ProductComment(record.get(0), description, "",
+                        createDateClassFromStringDate(record.get(3).split(" ")[0]),
+                        Integer.parseInt(record.get(4)), "", locale, -1, -1);
 
                 if (!productsCommentsMap.containsKey(model)) {
                     productsCommentsMap.put(model, new ArrayList<>());
@@ -69,7 +87,7 @@ public class Util {
         ZonedDateTime newDateTime = dateTime.plus(Duration.ofHours(3));
         Date newDate = Date.from(newDateTime.toInstant());
 
-        return FORMATTER_GET.format(newDate) + " в " + TIME_FORMATTER_GET.format(newDate);
+        return FORMATTER_GET.format(newDate) + " at " + TIME_FORMATTER_GET.format(newDate);
     }
 
     public Date createDateClassFromStringDate(String date) throws ParseException {
@@ -101,48 +119,59 @@ public class Util {
         return Arrays.asList(translatedText.split("\n"));
     }
 
-    @Cacheable(value = "initCache", key = "#param")
-    public Map<String, List<Pair<String, Integer>>> init(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments,
-                                                         String source, String target, int param) {
+    public void init(Map<String, List<ProductComment>> productsCommentsMap) {
         for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
+            Map<String, List<ProductComment>> mapLocale = new TreeMap<>();
 
-            StringBuilder commentsForTranslate = new StringBuilder();
-            entry.getValue().forEach(comment -> commentsForTranslate.append(comment.getDescription())
-                    .append("\n"));
-            commentsForTranslate.deleteCharAt(commentsForTranslate.length() - 1);
+            for (int i = 0; i < source.length; i++) {
+                mapLocale.put(source[i], new ArrayList<>());
+            }
 
-            List<Pair<String, Integer>> commentsPairs = new ArrayList<>();
+            entry.getValue().forEach(comment -> {
+                if (mapLocale.containsKey(comment.getLocale())) {
+                    mapLocale.get(comment.getLocale()).add(comment);
+                }
+            });
 
-            try {
-                for (String str : translate(commentsForTranslate.toString(), source, target)) {
-                    commentsPairs.add(Pair.of(str
-                                    .replaceAll("[^\\p{L}\\s]+", "")
-                                    .replaceAll("\\s+", " ")
-                                    .trim()
-                                    .toLowerCase(),
-                            -1));
+            for (Map.Entry<String, List<ProductComment>> localeEntry : mapLocale.entrySet()) {
+                if (!localeEntry.getValue().isEmpty()) {
+                    boolean allNonEmpty = localeEntry.getValue().stream().allMatch(c -> !c.getDescriptionTranslated().isEmpty());
+
+                    if (!allNonEmpty) {
+                        StringBuilder commentsForTranslate = new StringBuilder();
+                        localeEntry.getValue().forEach(comment -> commentsForTranslate.append(comment.getDescription())
+                                .append("\n"));
+                        commentsForTranslate.deleteCharAt(commentsForTranslate.length() - 1);
+
+                        try {
+                            List<String> translatedComments = translate(commentsForTranslate.toString(), localeEntry.getKey(), target);
+                            List<String> translatedCommentsForUI = Collections.emptyList();
+                            boolean flag = false;
+
+                            if (!localeEntry.getKey().equals(commentLang)) {
+                                translatedCommentsForUI = translate(commentsForTranslate.toString(), localeEntry.getKey(), commentLang);
+                                flag = true;
+                            }
+
+                            for (int i = 0; i < localeEntry.getValue().size(); i++) {
+                                if (flag) {
+                                    localeEntry.getValue().get(i).setDescriptionForUI(translatedCommentsForUI.get(i));
+                                }
+
+                                localeEntry.getValue().get(i).setDescriptionTranslated(translatedComments.get(i)
+                                        .replaceAll("[^\\p{L}\\s]+", "")
+                                        .replaceAll("\\s+", " ")
+                                        .trim()
+                                        .toLowerCase());
+                            }
+                        }
+                        catch (Exception e) {
+                            log.info(e.getMessage());
+                        }
+                    }
                 }
             }
-            catch (Exception e) {
-                log.info(e.getMessage());
-            }
-
-            processedComments.put(entry.getKey(), commentsPairs);
         }
-
-        return processedComments;
-    }
-
-    public Map<String, List<Pair<String, Integer>>> result(Map<String, List<ProductComment>> productsCommentsMap, Map<String, List<Pair<String, Integer>>> processedComments) {
-        for (Map.Entry<String, List<Pair<String, Integer>>> entry : processedComments.entrySet()) {
-            List<ProductComment> productComments = productsCommentsMap.get(entry.getKey());
-            for (int i = 0; i < entry.getValue().size(); i++) {
-                int value = entry.getValue().get(i).getValue();
-                entry.getValue().set(i, Pair.of(productComments.get(i).getDescription(), value));
-            }
-        }
-
-        return processedComments;
     }
 
     public void startScript() {

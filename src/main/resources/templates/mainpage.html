@@ -30,21 +30,21 @@
                     <div class="col-5 d-flex align-items-center" style="font-size: 19px;" th:text="${product.productName}"></div>
                     <div class="col-3 d-flex align-items-center">
                         <div>
-                            <div class="row"><div class="col" style="color: green; font-size: 14px;" th:text="${'Позитивних коментарів: '+product.posNumber}"></div></div>
-                            <div class="row"><div class="col" style="color: red; font-size: 14px;" th:text="${'Негативних коментарів: '+product.negNumber}"></div></div>
-                            <div class="row"><div class="col" style="font-size: 14px;" th:text="${'Загальна кількість: '+product.totalQuantityComments}"></div></div>
+                            <div class="row"><div class="col" style="color: green; font-size: 14px;" th:text="${'Positive comments: '+product.posNumber}"></div></div>
+                            <div class="row"><div class="col" style="color: red; font-size: 14px;" th:text="${'Negative comments: '+product.negNumber}"></div></div>
+                            <div class="row"><div class="col" style="font-size: 14px;" th:text="${'Total number: '+product.totalQuantityComments}"></div></div>
                         </div>
                     </div>
                     <div class="col-2 d-flex align-items-center">
                         <div>
                             <div class="row"><div class="col" style="font-size: 15px;" th:text="${product.positivePercentage}"></div></div>
-                            <div class="row"><div class="col" style="font-size: 15px;" th:text="${'Оцінка від клієнтів: '+product.ratingFromClients}"></div></div>
+                            <div class="row"><div class="col" style="font-size: 15px;" th:text="${'Rating from customers: '+product.ratingFromClients}"></div></div>
                         </div>
                     </div>
                     <div class="col-2 d-flex align-items-center" align="center">
                         <div class="col text-center">
                             <form th:action="@{/fullinfo}" th:method="get">
-                                <button type="submit" class="btn btn-primary" style="width: 100px;">Інфо</button>
+                                <button type="submit" class="btn btn-primary" style="width: 100px;">Info</button>
                                 <input class="form-control me-2" type="hidden"
                                        aria-label="Search" name="productFullInfo" th:value="${product.productName}">
                             </form>
@@ -61,7 +61,7 @@
             <div class="col">
                 <nav>
                     <ul class="pagination justify-content-center">
-                        <li class="page-item"><a class="page-link" style="color: rgb(73,73,73); background-color: lightgray;">Сторінки:</a></li>
+                        <li class="page-item"><a class="page-link" style="color: rgb(73,73,73); background-color: lightgray;">Pages:</a></li>
                         <li class="page-item" th:each="page: ${pages}">
                             <a class="page-link" th:href="${'/?page='}+${page}" th:text="${page}" style="color: rgb(73,73,73); background-color: lightgray;"></a>
                         </li>

@@ -1,4 +1,4 @@
-package com.hardcode.commentsanalyzer.model.dto;
+package com.hardcode.sentimeter.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
