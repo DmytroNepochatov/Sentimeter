@@ -3,6 +3,7 @@ package com.hardcode.sentimeter.service;
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
 import com.hardcode.sentimeter.model.ProductComment;
+import com.hardcode.sentimeter.model.dto.MyCustomEvent;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -24,8 +25,9 @@ import org.apache.mahout.math.Vector;
 import org.apache.mahout.vectorizer.SparseVectorsFromSequenceFiles;
 import org.apache.mahout.vectorizer.TFIDF;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.StringReader;
@@ -85,8 +87,9 @@ public class NaiveBayesAlgorithm {
                 "-x", Integer.toString(maxDFPercent), "-ng", Integer.toString(maxNGramSize)});
     }
 
-    @PostConstruct
-    private void initializeModel() throws Exception {
+    @Async
+    @EventListener
+    public void initializeModel(MyCustomEvent event) throws Exception {
         if (isModelSaved()) {
             loadNaiveBayesModel();
         }
@@ -225,5 +228,9 @@ public class NaiveBayesAlgorithm {
                 }
             }
         }
+    }
+
+    public boolean isModelReady() {
+        return isModelSaved();
     }
 }

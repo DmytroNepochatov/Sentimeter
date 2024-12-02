@@ -1,17 +1,23 @@
 package com.hardcode.sentimeter.model;
 
+import com.hardcode.sentimeter.model.dto.MyCustomEvent;
 import com.hardcode.sentimeter.util.Util;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import javax.annotation.PostConstruct;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @Getter
@@ -19,30 +25,37 @@ import java.util.Map;
 @Slf4j
 public class SourceCommentsStorage {
     private static final String URL = "http://translator:5000";
-    private static final int RETRY_DELAY = 5;
+    private static final int RETRY_DELAY = 15;
     private Date lastUpdated;
     private Map<String, List<ProductComment>> productsCommentsMap;
     private Util util;
+    private boolean isReadyFlag = false;
 
     @Autowired
     public SourceCommentsStorage(Util util) {
         this.util = util;
     }
 
-    @PostConstruct
-    protected void init() {
-        lastUpdated = new Date();
-        productsCommentsMap = util.readProductsCommentsFromCSVFile();
-
-        waitForService();
-        util.init(productsCommentsMap);
+    @Async
+    @EventListener
+    public void init(MyCustomEvent event) {
+        if (!isReadyFlag) {
+            lastUpdated = new Date();
+            productsCommentsMap = util.readProductsCommentsFromCSVFile();
+            waitForService().thenRun(() -> CompletableFuture.runAsync(() -> {
+                util.init(productsCommentsMap);
+                log.info("Comments initialized");
+                isReadyFlag = true;
+            }));
+        }
     }
 
-    private void waitForService() {
+    private CompletableFuture<Void> waitForService() {
         RestTemplate restTemplate = new RestTemplate();
-        boolean flag = false;
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        CompletableFuture<Void> future = new CompletableFuture<>();
 
-        while (!flag) {
+        executor.scheduleWithFixedDelay(() -> {
             try {
                 HttpHeaders headers = new HttpHeaders();
                 HttpEntity<String> entity = new HttpEntity<>(headers);
@@ -55,20 +68,20 @@ public class SourceCommentsStorage {
                 );
 
                 if (response.getStatusCode() == HttpStatus.OK) {
-                    flag = true;
                     log.info("Translator is available, data pre-initialization started...");
+                    future.complete(null);
+                    executor.shutdown();
                 }
             }
             catch (Exception e) {
                 log.info("Translator not available. Waiting {} seconds to reconnect...", RETRY_DELAY);
-
-                try {
-                    Thread.sleep(RETRY_DELAY * 1000);
-                }
-                catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
             }
-        }
+        }, 0, RETRY_DELAY, TimeUnit.SECONDS);
+
+        return future;
+    }
+
+    public boolean isDataReady() {
+        return isReadyFlag;
     }
 }

@@ -20,9 +20,8 @@ public class AutoUpdater {
 
     @Scheduled(cron = "0 0 0/4 * * *")
     public void updateSourceCommentsStorage() {
-        util.startScript();
-
         sourceCommentsStorage.setLastUpdated(new Date());
+        sourceCommentsStorage.setReadyFlag(false);
         sourceCommentsStorage.setProductsCommentsMap(
                 util.readProductsCommentsFromCSVFile());
         util.init(sourceCommentsStorage.getProductsCommentsMap());

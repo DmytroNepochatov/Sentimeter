@@ -1,14 +1,16 @@
 package com.hardcode.sentimeter.service;
 
 import com.hardcode.sentimeter.model.ProductComment;
+import com.hardcode.sentimeter.model.dto.MyCustomEvent;
 import opennlp.tools.doccat.DoccatModel;
 import opennlp.tools.doccat.DocumentCategorizerME;
 import opennlp.tools.doccat.DocumentSampleStream;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import javax.annotation.PostConstruct;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +20,7 @@ public class MaxEntAlgorithm {
     private static final String MODEL_PATH = "maxentmodel/model.bin";
     private static final String FILENAME = "train_data.txt";
     private static final String CHARSET = "UTF-8";
+    private boolean isTrained = false;
     private DoccatModel model;
 
     @Value("${train-data.language}")
@@ -29,8 +32,9 @@ public class MaxEntAlgorithm {
     @Value("${maxent.variable.training-iterations}")
     private int trainingIterations;
 
-    @PostConstruct
-    protected void trainModel() {
+    @Async
+    @EventListener
+    public void trainModel(MyCustomEvent event) {
         model = loadModel();
 
         if (model == null) {
@@ -45,6 +49,7 @@ public class MaxEntAlgorithm {
                         trainingIterations);
 
                 saveModel(model);
+                isTrained = true;
             }
             catch (IOException e) {
                 e.printStackTrace();
@@ -59,6 +64,9 @@ public class MaxEntAlgorithm {
                     }
                 }
             }
+        }
+        else {
+            isTrained = true;
         }
     }
 
@@ -106,5 +114,9 @@ public class MaxEntAlgorithm {
         catch (IOException e) {
             return null;
         }
+    }
+
+    public boolean isModelReady() {
+        return model != null && isTrained;
     }
 }

@@ -18,9 +18,8 @@ public class ManualUpdater {
     }
 
     public void updateSourceCommentsStorage() {
-        util.startScript();
-
         sourceCommentsStorage.setLastUpdated(new Date());
+        sourceCommentsStorage.setReadyFlag(false);
         sourceCommentsStorage.setProductsCommentsMap(
                 util.readProductsCommentsFromCSVFile());
         util.init(sourceCommentsStorage.getProductsCommentsMap());

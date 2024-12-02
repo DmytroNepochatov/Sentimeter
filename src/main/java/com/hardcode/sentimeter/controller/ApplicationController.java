@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hardcode.sentimeter.model.ProductComment;
 import com.hardcode.sentimeter.model.SourceCommentsStorage;
 import com.hardcode.sentimeter.model.dto.AboutProduct;
+import com.hardcode.sentimeter.model.dto.MyCustomEvent;
 import com.hardcode.sentimeter.model.dto.ProductCommentForFullInfo;
 import com.hardcode.sentimeter.model.dto.ProductForMainView;
 import com.hardcode.sentimeter.service.ManualUpdater;
@@ -12,24 +13,35 @@ import com.hardcode.sentimeter.service.NaiveBayesAlgorithm;
 import com.hardcode.sentimeter.service.SearchService;
 import com.hardcode.sentimeter.util.Util;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Controller
 public class ApplicationController {
     private static final String DATE_PATTERN = "dd.M.yyyy";
+    private static final String FILENAME_TRAIN_DATA = "train_data.txt";
+    private static final String FILENAME_DATA_SCRIPT = "get_data_script.sh";
+    private final ApplicationEventPublisher eventPublisher;
     private SourceCommentsStorage sourceCommentsStorage;
     private MaxEntAlgorithm maxEntAlgorithm;
     private NaiveBayesAlgorithm naiveBayesAlgorithm;
     private SearchService searchService;
     private ManualUpdater manualUpdater;
     private Util util;
+    private boolean startEventFlag = false;
 
     @Autowired
     public ApplicationController(SourceCommentsStorage sourceCommentsStorage,
@@ -37,21 +49,27 @@ public class ApplicationController {
                                  NaiveBayesAlgorithm naiveBayesAlgorithm,
                                  SearchService searchService,
                                  ManualUpdater manualUpdater,
-                                 Util util) {
+                                 Util util, ApplicationEventPublisher eventPublisher) {
         this.sourceCommentsStorage = sourceCommentsStorage;
         this.maxEntAlgorithm = maxEntAlgorithm;
         this.naiveBayesAlgorithm = naiveBayesAlgorithm;
         this.searchService = searchService;
         this.manualUpdater = manualUpdater;
         this.util = util;
+        this.eventPublisher = eventPublisher;
     }
 
     @GetMapping("/")
     public String getMainPage(Model model, @RequestParam(value = "page", defaultValue = "1") int page) {
-        return forMainPageAndSearch(model,
-                searchService.getPage(sourceCommentsStorage.getProductsCommentsMap(), page),
-                true,
-                "No products found, something went wrong");
+        Map<String, List<ProductComment>> productMap = null;
+
+        if (sourceCommentsStorage.isDataReady() &&
+                maxEntAlgorithm.isModelReady() &&
+                naiveBayesAlgorithm.isModelReady()) {
+            productMap = searchService.getPage(sourceCommentsStorage.getProductsCommentsMap(), page);
+        }
+
+        return forMainPageAndSearch(model, productMap, true, "No products found, something went wrong");
     }
 
     @GetMapping("/search")
@@ -60,10 +78,15 @@ public class ApplicationController {
             return "redirect:/?page=1";
         }
         else {
-            return forMainPageAndSearch(model,
-                    searchService.getBySearchString(sourceCommentsStorage.getProductsCommentsMap(), searchKeyword),
-                    false,
-                    "No products found");
+            Map<String, List<ProductComment>> productMap = null;
+
+            if (sourceCommentsStorage.isDataReady() &&
+                    maxEntAlgorithm.isModelReady() &&
+                    naiveBayesAlgorithm.isModelReady()) {
+                productMap = searchService.getBySearchString(sourceCommentsStorage.getProductsCommentsMap(), searchKeyword);
+            }
+
+            return forMainPageAndSearch(model, productMap, false, "No products found");
         }
     }
 
@@ -139,50 +162,119 @@ public class ApplicationController {
         model.addAttribute("negCommentsMaxEntList", product.getNegCommentsMaxEnt());
         model.addAttribute("posCommentsNaiveBayesList", product.getPosCommentsNaiveBayes());
         model.addAttribute("negCommentsNaiveBayesList", product.getNegCommentsNaiveBayes());
+        model.addAttribute("flagInit", false);
         return "productpage";
     }
 
+    @PostMapping("/upload")
+    public String uploadFiles(Model model, @RequestParam("files") MultipartFile[] files) {
+        boolean trainFile = false;
+        boolean dataScript = false;
+
+        for (MultipartFile file : files) {
+            try {
+                File destFile = new File(file.getOriginalFilename());
+                file.transferTo(destFile.toPath());
+                log.info("File uploaded successfully: {}", destFile.getAbsolutePath());
+
+                if (file.getOriginalFilename().equals(FILENAME_TRAIN_DATA)) {
+                    trainFile = true;
+                }
+                else if (file.getOriginalFilename().equals(FILENAME_DATA_SCRIPT)) {
+                    dataScript = true;
+                }
+            }
+            catch (IOException e) {
+                log.info("Error uploading file: {}, : {}", file.getOriginalFilename(), e.getMessage());
+            }
+        }
+
+        if ((trainFile && dataScript) ||
+                (util.isFileAvailable(FILENAME_TRAIN_DATA) && util.isFileAvailable(FILENAME_DATA_SCRIPT))) {
+            startEventFlag = true;
+            sourceCommentsStorage.setReadyFlag(false);
+            eventPublisher.publishEvent(new MyCustomEvent(this));
+            return "redirect:/?page=1";
+        }
+        else if (trainFile) {
+            model.addAttribute("errorMsg", "The script for receiving data is not loaded");
+        }
+        else if (dataScript) {
+            model.addAttribute("errorMsg", "Training data file not loaded");
+        }
+
+        model.addAttribute("flagInit", true);
+        model.addAttribute("flag", false);
+        model.addAttribute("products", new ArrayList<>());
+        model.addAttribute("lastUpdated", "");
+
+        return "mainpage";
+    }
+
     private String forMainPageAndSearch(Model model, Map<String, List<ProductComment>> productsCommentsMap, boolean flag, String errorMsg) {
-        List<ProductForMainView> products = new ArrayList<>();
+        if (sourceCommentsStorage.isDataReady() &&
+                maxEntAlgorithm.isModelReady() &&
+                naiveBayesAlgorithm.isModelReady()) {
+            List<ProductForMainView> products = new ArrayList<>();
 
-        maxEntAlgorithm.classifyComments(productsCommentsMap);
+            maxEntAlgorithm.classifyComments(productsCommentsMap);
 
-        for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
-            AtomicInteger rating = new AtomicInteger(0);
-            entry.getValue().forEach(c -> rating.addAndGet(c.getGrade()));
+            for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
+                AtomicInteger rating = new AtomicInteger(0);
+                entry.getValue().forEach(c -> rating.addAndGet(c.getGrade()));
 
-            AtomicInteger posNumber = new AtomicInteger(0);
-            AtomicInteger quantity = new AtomicInteger(0);
-            entry.getValue().forEach(c -> {
-                if (c.getTonalityMaxEnt() == 1) {
-                    posNumber.incrementAndGet();
+                AtomicInteger posNumber = new AtomicInteger(0);
+                AtomicInteger quantity = new AtomicInteger(0);
+                entry.getValue().forEach(c -> {
+                    if (c.getTonalityMaxEnt() == 1) {
+                        posNumber.incrementAndGet();
+                    }
+                    if (!c.getDescriptionTranslated().isEmpty()) {
+                        quantity.incrementAndGet();
+                    }
+                });
+
+                int positivePercentage = (int) ((float) posNumber.get() / quantity.get() * 100);
+                ProductForMainView product = new ProductForMainView(entry.getKey(),
+                        Math.round(((float) rating.get() / entry.getValue().size()) * 10) / 10.0f,
+                        quantity.get(),
+                        posNumber.get(),
+                        quantity.get() - posNumber.get(),
+                        positivePercentage + "% positive reviews");
+                products.add(product);
+            }
+
+            List<Integer> pages = new ArrayList<>();
+            for (int i = 0; i < searchService
+                    .getPagesCount(sourceCommentsStorage.getProductsCommentsMap().size()); i++) {
+                pages.add(i + 1);
+            }
+
+            model.addAttribute("flagInit", false);
+            model.addAttribute("flag", flag);
+            model.addAttribute("errorMsg", errorMsg);
+            model.addAttribute("products", products);
+            model.addAttribute("lastUpdated", util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
+            model.addAttribute("pages", pages);
+        }
+        else {
+            if (!util.isFileAvailable(FILENAME_TRAIN_DATA) || !util.isFileAvailable(FILENAME_DATA_SCRIPT)) {
+                model.addAttribute("errorMsg", "Please upload the training data file and script to receive comments");
+            }
+            else {
+                model.addAttribute("errorMsg", "Please wait, analysis is in progress");
+
+                if (!startEventFlag) {
+                    eventPublisher.publishEvent(new MyCustomEvent(this));
                 }
-                if (!c.getDescriptionTranslated().isEmpty()) {
-                    quantity.incrementAndGet();
-                }
-            });
+            }
 
-            int positivePercentage = (int) ((float) posNumber.get() / quantity.get() * 100);
-            ProductForMainView product = new ProductForMainView(entry.getKey(),
-                    Math.round(((float) rating.get() / entry.getValue().size()) * 10) / 10.0f,
-                    quantity.get(),
-                    posNumber.get(),
-                    quantity.get() - posNumber.get(),
-                    positivePercentage + "% positive reviews");
-            products.add(product);
+            model.addAttribute("flagInit", true);
+            model.addAttribute("flag", false);
+            model.addAttribute("products", new ArrayList<>());
+            model.addAttribute("lastUpdated", "");
         }
 
-        List<Integer> pages = new ArrayList<>();
-        for (int i = 0; i < searchService
-                .getPagesCount(sourceCommentsStorage.getProductsCommentsMap().size()); i++) {
-            pages.add(i + 1);
-        }
-
-        model.addAttribute("flag", flag);
-        model.addAttribute("errorMsg", errorMsg);
-        model.addAttribute("products", products);
-        model.addAttribute("lastUpdated", util.createStringDateFromClassDate(sourceCommentsStorage.getLastUpdated()));
-        model.addAttribute("pages", pages);
         return "mainpage";
     }
 

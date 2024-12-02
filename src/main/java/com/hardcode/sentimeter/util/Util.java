@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.text.ParseException;
@@ -46,6 +47,7 @@ public class Util {
     private String commentLang;
 
     public Map<String, List<ProductComment>> readProductsCommentsFromCSVFile() {
+        startScript();
         Map<String, List<ProductComment>> productsCommentsMap = new TreeMap<>();
 
         try {
@@ -120,6 +122,8 @@ public class Util {
     }
 
     public void init(Map<String, List<ProductComment>> productsCommentsMap) {
+        log.info("Started translated product comments");
+
         for (Map.Entry<String, List<ProductComment>> entry : productsCommentsMap.entrySet()) {
             Map<String, List<ProductComment>> mapLocale = new TreeMap<>();
 
@@ -174,9 +178,20 @@ public class Util {
         }
     }
 
-    public void startScript() {
+    private void startScript() {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(GET_DATA_SCRIPT);
+            String scriptPath = GET_DATA_SCRIPT;
+            ProcessBuilder chmodProcessBuilder = new ProcessBuilder("chmod", "+x", scriptPath);
+            chmodProcessBuilder.directory(new java.io.File("."));
+            Process chmodProcess = chmodProcessBuilder.start();
+
+            int chmodExitCode = chmodProcess.waitFor();
+            if (chmodExitCode != 0) {
+                log.error("Failed to set executable permissions for script. Exit code: {}", chmodExitCode);
+                return;
+            }
+
+            ProcessBuilder processBuilder = new ProcessBuilder(scriptPath);
             processBuilder.directory(new java.io.File("."));
             Process process = processBuilder.start();
 
@@ -185,5 +200,9 @@ public class Util {
         catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public boolean isFileAvailable(String fileName) {
+        return new File(fileName).exists();
     }
 }
